@@ -1,0 +1,69 @@
+#!/bin/bash
+
+function usage()
+{
+   echo "Usage: $0 1|0"
+   echo "       1 --> enable network-manager (GUI)"
+   echo "       0 --> disable network-manager (GUI)"
+   echo
+   echo "       You need to be root!"
+   echo
+}
+
+extension=$(date +%Y%m%d_%H%M%S)
+
+if [[ $(id -u) -ne 0 ]]; then
+   usage
+   exit 1
+fi
+
+# is the network-manager running?
+nmcli nm | grep "^not running" > /dev/null
+running=$?
+
+if [[ $1 -eq 1 ]]; then     # ENABLE NM 
+   if [[ ${running} -eq 1 ]]; then
+      echo "The GUI network-manager is already enabled!"
+      exit
+   fi
+   echo "Your OS might be unstable after enabling the GUI network manager. It is possible that you need to reboot."
+   echo "You'll need to comment out the references to all interfaces (except lo) in /etc/network/interfaces."
+   answer='garbage'
+   while [[ "${answer}" != "Y" && "${answer}" != "N" ]]; do
+      echo "Do you want to continue (Y/N)?"
+      read answer
+      answer=${answer^^}   # uppercase
+   done
+   if [[ "{$answer}" == "N" ]]; then
+      exit 0
+   fi
+   /etc/init.d/networking stop
+   mv /etc/init/network-manager.override /etc/init/network-manager.override_${extension}
+   answer='garbage' 
+   while [[ "${answer}" != "Y" && "${answer}" != "N" ]]; do
+      echo "Do you want to reboot now (Y/N)?"
+      read answer
+      answer=${answer^^}   # uppercase
+   done
+   if [[ "${answer}" == "Y" ]]; then
+      shutdown -r now
+   fi
+elif [[ $1 -eq 0 ]]; then
+   if [[  ${running} -eq 0 ]]; then
+      echo "The GUI network-manager is not running"
+      exit
+   fi
+   echo "When you disable the GUI network-manager, you have to configure your devices in /etc/network/interfaces."
+   answer='garbage'
+   while [[ "${answer}" != "Y" && "${answer}" != "N" ]]; do
+      echo "Are you sure to disable the GUI network-manager (Y/N)?"
+      read answer
+      answer=${answer^^}   # uppercase
+   done
+   if [[ "${answer}" == "Y" ]]; then 
+      stop network-manager
+      echo "manual" | tee /etc/init/network-manager.override
+      echo "Adapt /etc/network/interfaces (if needed) and execute (as root):"
+      echo "   service networking start"
+   fi
+fi
